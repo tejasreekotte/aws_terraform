@@ -12,6 +12,6 @@ phases :
       - ./install-terraform.sh # install terraform
       - ./configure-named-profile.sh # configure named profile
 
-build:
-  commands :
-    - ./apply-terraform.sh
+  build:
+    commands :
+      - ./apply-terraform.sh
