@@ -4,7 +4,7 @@
 set -eu
 
 # go back to the previous directory
-cd ..
+# cd ..
 
 # initialize terraform
 terraform init
