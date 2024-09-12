@@ -19,3 +19,8 @@ variable "s3_bucket_name" {
   description = "The name of the S3 bucket"
   type        = string
 }
+
+variable "build_id" {
+  description = "The build ID to be appended to the bucket name"
+  type        = string
+}
