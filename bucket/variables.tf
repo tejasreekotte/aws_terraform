@@ -20,7 +20,7 @@ variable "s3_bucket_name" {
   type        = string
 }
 
-variable "build_id" {
-  description = "The build ID to be appended to the bucket name"
+variable "timestamp" {
+  description = "The timestamp to be appended to the bucket name"
   type        = string
 }

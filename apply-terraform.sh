@@ -1,5 +1,5 @@
 #!/bin/bash
-BUILD_ID=$(echo "${CODEBUILD_BUILD_ID}" | tr -dc 'a-zA-Z0-9-')
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 # fail on any error
 set -eu
 
@@ -10,4 +10,4 @@ cd bucket
 terraform init
 
 # # apply terraform
-terraform apply -auto-approve -var "build_id=${BUILD_ID}"
+terraform apply -auto-approve -var "timestamp=${TIMESTAMP}"
