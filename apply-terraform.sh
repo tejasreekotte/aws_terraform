@@ -1,13 +1,21 @@
 #!/bin/bash
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+
 # fail on any error
 set -eu
 
-# go back to the previous directory
-cd bucket
+# Check the resource type and navigate to the correct directory
+if [ "${resource_type}" == "bucket" ]; then
+    cd bucket
+elif [ "${resource_type}" == "vm" ]; then
+    cd vm
+else
+    echo "Unknown resource type: ${resource_type}"
+    exit 1
+fi
 
-# initialize terraform
+# Initialize Terraform
 terraform init
 
-# # apply terraform
+# Apply Terraform with the timestamp variable
 terraform apply -auto-approve -var "timestamp=${TIMESTAMP}"
