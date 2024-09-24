@@ -1,99 +1,235 @@
-# AWS Terraform Repository
+## AWS Terraform and CodeBuild POC
 
-## Overview
+This Proof of Concept (POC) demonstrates how to provision infrastructure in AWS using **Terraform** with automation through **AWS CodeBuild**. The resources being provisioned include:
 
-This repository contains Terraform configurations and associated scripts designed to automate the deployment and management of infrastructure on Amazon Web Services (AWS). It leverages AWS CodeBuild for continuous integration and deployment (CI/CD), enabling automated provisioning, updating, and teardown of AWS resources through Terraform scripts.
+1. **S3 Bucket**
+2. **EC2 Instance**
 
-## Prerequisites
-
-Before using the Terraform configurations and setting up AWS CodeBuild, ensure you have the following:
-
-- **AWS Account**: Necessary to deploy and manage AWS resources.
-- **AWS CLI**: Installed and configured with your AWS credentials. [Installation Guide](https://aws.amazon.com/cli/)
-- **Terraform**: Installed on your local machine or CI/CD environment. [Download Terraform](https://www.terraform.io/downloads)
-- **Git**: Installed for cloning the repository.
-- **IAM Permissions**: Appropriate permissions to create and manage AWS resources and CodeBuild projects.
-- **GitHub Account**: To access and clone the repository.
+The workflow involves using AWS CodeBuild to execute the Terraform scripts, applying the configurations to provision resources in AWS.
 
 ## Repository Structure
 
-```
+```bash
 aws_terraform/
-├── apply-terraform.sh
-├── buildspec.yml
-├── configure-named-profile.sh
-├── install-terraform.sh
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── terraform.tfvars
-└── README.md
+├── bucket/
+│   ├── main.tf                       # Terraform configuration for S3 bucket
+│   └── variables.tf                  # Variables for S3 bucket configuration
+├── vm/
+│   ├── main.tf                       # Terraform configuration for EC2 instance
+│   └── variables.tf                  # Variables for EC2 instance configuration
+├── apply-terraform.sh                # Shell script to apply Terraform changes
+├── buildspec.yml                     # AWS CodeBuild build specification
+├── configure-named-profile.sh        # Script to configure AWS CLI profile
+├── install-terraform.sh              # Script to install Terraform on CodeBuild
+└── README.md                         # POC documentation (this file)
 ```
 
-### File Descriptions
+---
 
-- **`main.tf`**: The primary Terraform configuration file defining AWS resources such as EC2 instances, S3 buckets, VPCs, etc.
-  
-- **`variables.tf`**: Contains variable declarations used in the Terraform configurations, allowing for flexible and reusable setups.
+## Prerequisites
 
-- **`outputs.tf`**: Defines output values from the Terraform configurations, such as resource IDs, IP addresses, and URLs.
+1. **AWS CLI**: Ensure that the AWS CLI is installed and configured on your system.
+2. **Terraform**: Terraform should be installed on the system running the POC (or will be automatically installed during CodeBuild execution).
+3. **AWS Account**: Ensure that you have appropriate IAM permissions to create S3 buckets, EC2 instances, and interact with CodeBuild.
 
-- **`terraform.tfvars`**: Stores the values for variables declared in `variables.tf`, enabling customization for different environments or use cases.
+---
 
-- **`apply-terraform.sh`**: Shell script to automate Terraform commands, including initialization, planning, and applying configurations.
+## Step-by-Step Instructions
 
-- **`buildspec.yml`**: AWS CodeBuild configuration file that outlines the build phases and commands to execute during the CI/CD process.
+### 1. **AWS CLI Configuration**
 
-- **`configure-named-profile.sh`**: Shell script to set up AWS CLI named profiles, facilitating the use of specific credentials for Terraform operations.
+Before running Terraform or the CodeBuild job, the AWS CLI must be configured with the necessary credentials. Use the `configure-named-profile.sh` script to set up the AWS CLI profile for CodeBuild.
 
-- **`install-terraform.sh`**: Shell script to install Terraform in the build environment or local machine.
-
-- **`README.md`**: This documentation file providing an overview and usage instructions for the repository.
-
-## Usage
-
-### 1. Clone the Repository
-
-Clone this repository to your local machine using Git:
+#### Script: `configure-named-profile.sh`
 
 ```bash
-git clone https://github.com/tejasreekotte/aws_terraform.git
-cd aws_terraform
+#!/bin/bash
+
+# Set up the named AWS CLI profile with access keys
+aws configure set aws_access_key_id "<your_access_key>"
+aws configure set aws_secret_access_key "<your_secret_key>"
+aws configure set default.region "<your_aws_region>"
 ```
 
-### 2. Configure AWS Profile
+Replace `<your_access_key>`, `<your_secret_key>`, and `<your_aws_region>` with your actual AWS credentials. This ensures CodeBuild has access to your AWS resources.
 
-Run the script to set up your AWS CLI with a named profile:
+---
+
+### 2. **Installing Terraform**
+
+If Terraform is not already installed, the `install-terraform.sh` script will handle it. This script is called by AWS CodeBuild to ensure that Terraform is available.
+
+#### Script: `install-terraform.sh`
 
 ```bash
-./configure-named-profile.sh
+#!/bin/bash
+
+# Check if terraform is installed, if not install it
+if ! [ -x "$(command -v terraform)" ]; then
+  echo "Installing Terraform..."
+  wget https://releases.hashicorp.com/terraform/1.0.0/terraform_1.0.0_linux_amd64.zip
+  unzip terraform_1.0.0_linux_amd64.zip
+  sudo mv terraform /usr/local/bin/
+else
+  echo "Terraform is already installed."
+fi
 ```
 
-This script will prompt you to enter your AWS Access Key ID, Secret Access Key, and default region. It sets up a named profile in your AWS CLI configuration, which Terraform will use for authentication.
+---
 
-### 3. Install Terraform
+### 3. **S3 Bucket Provisioning**
 
-Execute the installation script to install Terraform:
+In the `bucket/` directory, the Terraform configuration files for creating an S3 bucket are stored. The `main.tf` contains the core infrastructure logic, while `variables.tf` holds configurable values.
+
+#### Terraform Configuration: `bucket/main.tf`
+
+```hcl
+provider "aws" {
+  region = var.region
+}
+
+resource "aws_s3_bucket" "example_bucket" {
+  bucket = var.bucket_name
+
+  versioning {
+    enabled = true
+  }
+
+  lifecycle_rule {
+    id      = "log"
+    enabled = true
+
+    transition {
+      days          = 30
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 365
+    }
+  }
+
+  tags = {
+    Name        = "TerraformBucket"
+    Environment = "Dev"
+  }
+}
+```
+
+#### Variables: `bucket/variables.tf`
+
+```hcl
+variable "bucket_name" {
+  description = "The name of the S3 bucket"
+  type        = string
+  default     = "example-terraform-bucket"
+}
+
+variable "region" {
+  description = "AWS Region to deploy the bucket"
+  default     = "us-east-1"
+}
+```
+
+---
+
+### 4. **EC2 Instance Provisioning**
+
+In the `vm/` directory, the Terraform configuration files for provisioning an EC2 instance are stored.
+
+#### Terraform Configuration: `vm/main.tf`
+
+```hcl
+provider "aws" {
+  region = var.region
+}
+
+resource "aws_instance" "web_instance" {
+  ami           = var.ami
+  instance_type = var.instance_type
+
+  tags = {
+    Name = "TerraformEC2Instance"
+  }
+}
+```
+
+#### Variables: `vm/variables.tf`
+
+```hcl
+variable "ami" {
+  description = "Amazon Machine Image ID for the EC2 instance"
+  type        = string
+  default     = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2
+}
+
+variable "instance_type" {
+  description = "The EC2 instance type"
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "region" {
+  description = "AWS Region to deploy the instance"
+  default     = "us-east-1"
+}
+```
+
+---
+
+### 5. **Applying Terraform Configuration**
+
+Use the `apply-terraform.sh` script to initialize and apply the Terraform configurations for both the S3 bucket and EC2 instance.
+
+#### Script: `apply-terraform.sh`
 
 ```bash
-./install-terraform.sh
+#!/bin/bash
+
+# Initialize and apply the Terraform configurations
+terraform init
+terraform apply -auto-approve
 ```
 
-This script downloads and installs the specified version of Terraform, ensuring that the correct version is used for your configurations.
+This script is executed manually or as part of the CodeBuild pipeline to provision the defined AWS resources.
 
-### 4. Apply Terraform Configuration
+---
 
-Use the provided script to initialize, plan, and apply the Terraform configurations:
+### 6. **AWS CodeBuild Setup**
 
-```bash
-./apply-terraform.sh
+The `buildspec.yml` file defines how AWS CodeBuild will execute the Terraform scripts to provision resources. It installs Terraform, configures the AWS CLI, and applies the Terraform configurations.
+
+#### Build Specification: `buildspec.yml`
+
+```yaml
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - ./install-terraform.sh  # Install Terraform if not present
+
+  pre_build:
+    commands:
+      - ./configure-named-profile.sh  # Set up AWS CLI credentials
+
+  build:
+    commands:
+      - cd bucket
+      - terraform init  # Initialize Terraform in bucket directory
+      - terraform apply -auto-approve  # Apply S3 bucket config
+      - cd ../vm
+      - terraform init  # Initialize Terraform in vm directory
+      - terraform apply -auto-approve  # Apply EC2 instance config
 ```
 
-This script performs the following steps:
+This file ensures that AWS CodeBuild:
 
-1. **Initialize Terraform**: Downloads necessary provider plugins and sets up the working directory.
-2. **Plan Infrastructure**: Creates an execution plan, allowing you to review changes before applying them.
-3. **Apply Configuration**: Deploys the defined infrastructure to AWS.
+1. Installs Terraform.
+2. Configures the AWS CLI profile.
+3. Provisions the S3 bucket and EC2 instance by applying the Terraform configurations.
+
+---
 
 ### 5. Build and Deploy via AWS CodeBuild
 
@@ -157,7 +293,7 @@ Ensure AWS CodeBuild has the necessary permissions to execute Terraform scripts 
 
    - **Connect to GitHub**:
      - If not already connected, authorize AWS CodeBuild to access your GitHub account.
-     - Select the repository `tejasreekotte/aws_terraform`.
+     - Select the repository `aws_terraform`.
    
    - **Branch**: Specify the branch to build from, e.g., `main` or `master`.
 
@@ -279,8 +415,14 @@ Monitor the build process through the AWS CodeBuild Console:
    - Review logs to identify and resolve any issues encountered during the build and deployment process.
 
 
-## Conclusion
+### Conclusion
 
-This repository streamlines the deployment and management of AWS infrastructure using Terraform, integrated seamlessly with AWS CodeBuild for automated CI/CD workflows. By following the provided setup instructions and adhering to best practices, you can achieve efficient, secure, and scalable infrastructure automation.
+This POC demonstrates the following key steps:
 
-Feel free to customize and extend the configurations to suit your specific project requirements. If you encounter any issues or have suggestions for improvements, please open an issue or submit a pull request.
+- **AWS CLI Configuration**: Ensures CodeBuild has access to your AWS resources.
+- **Terraform S3 Bucket and EC2 Instance Creation**: Terraform scripts are used to provision these resources.
+- **CodeBuild Automation**: AWS CodeBuild automates the execution of the Terraform scripts, allowing for infrastructure provisioning to be done without manual intervention.
+
+This workflow can be expanded to include other AWS services, more complex configurations, and CI/CD integrations for automated deployments.
+
+---
